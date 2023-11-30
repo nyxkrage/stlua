@@ -5,5 +5,5 @@
 
 start = "{{lastMessageId}}"
 start = start - 2
-setinput(messages(false, start - "{{lastMessageId}}"))
+setinput(messages(false, "start-{{lastMessageId}}"))
 

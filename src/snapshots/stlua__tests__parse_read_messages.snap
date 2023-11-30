@@ -2,4 +2,4 @@
 source: src/lib.rs
 expression: "StScriptWriter::run_code(lua_code)"
 ---
-/setvar key=start {{lastMessageId}} | /sub start 2 | /setvar key=start| /sub start {{lastMessageId}} | setvar key=temp_1 | /messages off {{getvar::temp_1}} | /setvar key=temp_0 | /setinput {{getvar::temp_0}}
+/setvar key=start {{lastMessageId}} | /sub start 2 | /setvar key=start| /messages off start-{{lastMessageId}} | /setvar key=temp_0 | /setinput {{getvar::temp_0}}
