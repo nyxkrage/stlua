@@ -7,6 +7,7 @@ use rslua::{
 pub struct StScriptWriter {
     output: String,
     temp_var_counter: i32,
+    nested: bool,
 }
 
 const BUILTINS: [&'static str; 3] = ["echo", "round", "input"];
@@ -37,15 +38,19 @@ impl StScriptWriter {
         StScriptWriter {
             output: String::new(),
             temp_var_counter: 0,
+            nested: false,
         }
     }
 
     pub fn run(&mut self, block: &Block, nested: bool) -> &str {
+        self.nested = nested;
         self.output.clear();
         for (i, stmt) in block.stats.iter().enumerate() {
             match stmt {
                 rslua::ast::Stat::IfStat(s) if !nested => self.if_statement(s),
-                rslua::ast::Stat::WhileStat(_) => unimplemented!("while"),
+                rslua::ast::Stat::WhileStat(s) => {
+                    self.while_statement(s);
+                }
                 rslua::ast::Stat::DoBlock(_) => unimplemented!("do"),
                 rslua::ast::Stat::ForStat(_) => unimplemented!("for"),
                 rslua::ast::Stat::RepeatStat(_) => unimplemented!("repeat"),
@@ -86,47 +91,70 @@ impl StScriptWriter {
             Expr::FuncBody(_) => todo!(),
             Expr::Table(_) => todo!(),
             Expr::BinExpr(b) => {
-                if let BinOp::Concat(_) = b.op {
-                    let mut str_builder = String::new();
-                    match b.left.as_ref() {
-                        Expr::String(s) => str_builder.push_str(&s.value()),
-                        Expr::Name(n) => str_builder.push_str(&n.value()),
-                        _ => str_builder.push_str(&format!(
-                            "{{{{getvar::{}}}}}",
-                            self.set_temp_var(b.left.as_ref())
-                        )),
+                match &b.op {
+                    BinOp::Concat(_) => {
+                        let mut str_builder = String::new();
+                        match b.left.as_ref() {
+                            Expr::String(s) => str_builder.push_str(&s.value()),
+                            Expr::Name(n) => {
+                                str_builder.push_str(&format!("{{{{getvar::{}}}}}", n.value()))
+                            }
+                            Expr::BinExpr(b) if matches!(b.op, BinOp::Concat(_)) => str_builder
+                                .push_str(&self.primitive_expr(&Expr::BinExpr(b.clone()))),
+                            _ => str_builder.push_str(&format!(
+                                "{{{{getvar::{}}}}}",
+                                self.set_temp_var(b.left.as_ref())
+                            )),
+                        }
+                        match b.right.as_ref() {
+                            Expr::String(s) => str_builder.push_str(&s.value()),
+                            Expr::Name(n) => {
+                                str_builder.push_str(&format!("{{{{getvar::{}}}}}", n.value()))
+                            }
+                            Expr::BinExpr(b) if matches!(b.op, BinOp::Concat(_)) => str_builder
+                                .push_str(&self.primitive_expr(&Expr::BinExpr(b.clone()))),
+                            _ => str_builder.push_str(&format!(
+                                "{{{{getvar::{}}}}}",
+                                self.set_temp_var(b.right.as_ref())
+                            )),
+                        }
+                        dbg!(str_builder)
                     }
-                    match b.right.as_ref() {
-                        Expr::String(s) => str_builder.push_str(&s.value()),
-                        Expr::Name(n) => str_builder.push_str(&n.value()),
-                        _ => str_builder.push_str(&format!(
-                            "{{{{getvar::{}}}}}",
-                            self.set_temp_var(b.right.as_ref())
-                        )),
+                    BinOp::Mul(_) => {
+                        let lhs = match b.left.as_ref() {
+                            Expr::String(s) => s.value(),
+                            Expr::Name(n) => n.value(),
+                            Expr::Int(i) => i.value().to_string(),
+                            _ => format!("{{{{getvar::{}}}}}", self.set_temp_var(b.left.as_ref())),
+                        };
+                        let rhs = match b.right.as_ref() {
+                            Expr::String(s) => s.value(),
+                            Expr::Name(n) => n.value(),
+                            Expr::Int(i) => i.value().to_string(),
+                            _ => format!("{{{{getvar::{}}}}}", self.set_temp_var(b.right.as_ref())),
+                        };
+                        format!("/mul {} {}", lhs, rhs)
                     }
-                    return str_builder;
-                };
-                if let BinOp::Mul(_) = b.op {
-                    let lhs = match b.left.as_ref() {
-                        Expr::String(s) => s.value(),
-                        Expr::Name(n) => n.value(),
-                        _ => format!("{{{{getvar::{}}}}}", self.set_temp_var(b.left.as_ref())),
-                    };
-                    let rhs = match b.right.as_ref() {
-                        Expr::String(s) => s.value(),
-                        Expr::Name(n) => n.value(),
-                        _ => format!("{{{{getvar::{}}}}}", self.set_temp_var(b.right.as_ref())),
-                    };
-                    return format!("/mul {} {}", lhs, rhs);
-                };
-                dbg!(b);
-                todo!()
+                    BinOp::Add(_) => {
+                        let lhs = match b.left.as_ref() {
+                            Expr::String(s) => s.value(),
+                            Expr::Name(n) => n.value(),
+                            Expr::Int(i) => i.value().to_string(),
+                            _ => format!("{{{{getvar::{}}}}}", self.set_temp_var(b.left.as_ref())),
+                        };
+                        let rhs = match b.right.as_ref() {
+                            Expr::String(s) => s.value(),
+                            Expr::Name(n) => n.value(),
+                            Expr::Int(i) => i.value().to_string(),
+                            _ => format!("{{{{getvar::{}}}}}", self.set_temp_var(b.right.as_ref())),
+                        };
+                        format!("/add {} {}", lhs, rhs)
+                    }
+                    o => todo!("{:#?}", o),
+                }
             }
             Expr::UnExpr(_) => todo!(),
-            Expr::SuffixedExpr(s) => {
-                dbg!(s);
-                self.suffixed_call(s)
-            }
+            Expr::SuffixedExpr(s) => self.suffixed_call(s),
         }
     }
 
@@ -167,13 +195,12 @@ impl StScriptWriter {
             rslua::ast::FuncArgs::Exprs(_, es, _) => es
                 .exprs
                 .iter()
-                .map(|e| {
-                    if let Expr::BinExpr(_) = e {
+                .map(|e| match e {
+                    Expr::BinExpr(b) if !matches!(b.op, BinOp::Concat(_)) => {
                         let name = self.set_temp_var(e);
                         format!("{{{{getvar::{}}}}}", name)
-                    } else {
-                        self.primitive_expr(e)
                     }
+                    _ => self.primitive_expr(e),
                 })
                 .collect::<Vec<String>>()
                 .join(" "),
@@ -182,30 +209,41 @@ impl StScriptWriter {
         }
     }
 
+    pub fn cond(&mut self, lhs: &Expr, op: &BinOp, rhs: &Expr) -> String {
+        let rule = match op {
+            rslua::ast::BinOp::Eq(_) => "eq",
+            rslua::ast::BinOp::Ne(_) => todo!(),
+            rslua::ast::BinOp::Lt(_) => todo!(),
+            rslua::ast::BinOp::Gt(_) => todo!(),
+            rslua::ast::BinOp::Le(_) => "lte",
+            rslua::ast::BinOp::Ge(_) => todo!(),
+            _ => todo!(),
+        };
+        let lhs = if let Expr::Name(n) = lhs {
+            n.value()
+        } else {
+            self.set_temp_var(lhs)
+        };
+        let rhs = if let Expr::Name(n) = rhs {
+            n.value()
+        } else {
+            self.set_temp_var(rhs)
+        };
+
+        format!("left={} right={} rule={}", lhs, rhs, rule,)
+    }
+
     pub fn if_statement(&mut self, stmt: &IfStat) {
         let cond = &stmt.cond_blocks.first().unwrap().cond;
         let (lhs, op, rhs) = match cond {
             Expr::BinExpr(expr) => (&expr.left, &expr.op, &expr.right),
             _ => todo!(),
         };
-        let rule = match op {
-            rslua::ast::BinOp::Eq(_) => "eq",
-            rslua::ast::BinOp::Ne(_) => todo!(),
-            rslua::ast::BinOp::Lt(_) => todo!(),
-            rslua::ast::BinOp::Gt(_) => todo!(),
-            rslua::ast::BinOp::Le(_) => todo!(),
-            rslua::ast::BinOp::Ge(_) => todo!(),
-            _ => todo!(),
-        };
+        let cond = self.cond(lhs, op, rhs);
         let block = &stmt.cond_blocks.first().unwrap().block;
         let else_block = &stmt.else_block;
-        let lhs = self.set_temp_var(lhs);
-        let rhs = self.set_temp_var(rhs);
 
-        self.output.push_str(&format!(
-            "/if left={{{{getvar::{}}}}} right={{{{getvar::{}}}}} rule={} ",
-            lhs, rhs, rule,
-        ));
+        self.output.push_str(&format!("/if {} ", cond));
         let mut writer = StScriptWriter::new();
         if let Some(else_block) = else_block {
             self.output
@@ -216,6 +254,7 @@ impl StScriptWriter {
     }
 
     pub fn set_temp_var(&mut self, value: &Expr) -> String {
+        let sep = if self.nested { r"\|" } else { "|" };
         let name = format!("temp_{}", self.temp_var_counter);
         self.temp_var_counter += 1;
         let val = match value {
@@ -233,7 +272,7 @@ impl StScriptWriter {
             Expr::BinExpr(_) => {
                 let val = self.primitive_expr(value);
                 self.output
-                    .push_str(&format!("{} | setvar key={} | ", val, name));
+                    .push_str(&format!("{} {sep} setvar key={} {sep} ", val, name));
                 return name;
             }
             Expr::UnExpr(_) => todo!(),
@@ -243,24 +282,46 @@ impl StScriptWriter {
                 let call = self.suffixed_call(t);
 
                 self.output
-                    .push_str(&format!("{} | /setvar key={} | ", call, name));
+                    .push_str(&format!("{} {sep} /setvar key={} {sep} ", call, name));
                 return name;
             }
         };
         self.output
-            .push_str(&format!("/setvar key={} {} | ", name, val));
+            .push_str(&format!("/setvar key={} {} {sep} ", name, val));
         name
     }
 
     fn assign_statment(&mut self, s: &rslua::ast::AssignStat) {
+        let sep = if self.nested { r"\|" } else { "|" };
         let name = if let Assignable::Name(n) = s.left.assignables.first().unwrap() {
             n.value()
         } else {
             unimplemented!()
         };
-        let value = self.primitive_expr(s.right.exprs.first().unwrap());
+        if let Expr::BinExpr(v) = s.right.exprs.first().unwrap() {
+            let value = self.primitive_expr(&Expr::BinExpr(v.clone()));
+            self.output
+                .push_str(&format!("{} {sep} /setvar key={}", value, name));
+        } else {
+            let value = self.primitive_expr(s.right.exprs.first().unwrap());
+            self.output
+                .push_str(&format!("/setvar key={} {} ", name, value));
+        };
+    }
+
+    fn while_statement(&mut self, stmt: &rslua::ast::WhileStat) {
+        let cond = &stmt.cond;
+        let (lhs, op, rhs) = match cond {
+            Expr::BinExpr(expr) => (&expr.left, &expr.op, &expr.right),
+            _ => todo!(),
+        };
+        let cond = self.cond(lhs, op, rhs);
+        let block = &stmt.block;
+
+        self.output.push_str(&format!("/while {} ", cond));
+        let mut writer = StScriptWriter::new();
         self.output
-            .push_str(&format!("/setvar key={} {} ", name, value));
+            .push_str(&format!("\"{}\"", writer.run(block, true)));
     }
 }
 

@@ -2,4 +2,4 @@
 source: src/lib.rs
 expression: "StScriptWriter::run_code(lua_code)"
 ---
-/setvar key=PI 3.1415 | /setvar key=r 50 | /mul r r | setvar key=temp_3 | /mul {{getvar::temp_3}} PI | setvar key=temp_2 | /round {{getvar::temp_2}} | /setvar key=temp_1 | Circle area: {{getvar::temp_1}} | setvar key=temp_0 | /echo {{getvar::temp_0}}
+/setvar key=PI 3.1415 | /setvar key=r 50 | /mul r r | setvar key=temp_2 | /mul {{getvar::temp_2}} PI | setvar key=temp_1 | /round {{getvar::temp_1}} | /setvar key=temp_0 | /echo Circle area: {{getvar::temp_0}}

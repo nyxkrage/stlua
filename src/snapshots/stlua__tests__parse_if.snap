@@ -2,4 +2,4 @@
 source: src/lib.rs
 expression: "StScriptWriter::run_code(lua_code)"
 ---
-/input What's your favorite drink? | /setvar key=temp_0 | /setvar key=temp_1 black tea | /if left={{getvar::temp_0}} right={{getvar::temp_1}} rule=eq else="/echo You shall not pass \| /break " "/echo Welcome to the club, {{user}}"
+/input What's your favorite drink? | /setvar key=temp_0 | /setvar key=temp_1 black tea | /if left=temp_0 right=temp_1 rule=eq else="/echo You shall not pass \| /break " "/echo Welcome to the club, {{user}}"

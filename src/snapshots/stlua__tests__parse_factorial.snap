@@ -1,0 +1,5 @@
+---
+source: src/lib.rs
+expression: "StScriptWriter::run_code(lua_code)"
+---
+/setvar key=input 5 | /setvar key=i 1 | /setvar key=product 1 | /while left=i right=input rule=lte "/mul product i \| /setvar key=product \| /add i 1 \| /setvar key=i"| /echo Factorial of {{getvar::input}}: {{getvar::product}}

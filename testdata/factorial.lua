@@ -11,8 +11,8 @@
 input = 5
 i = 1
 product = 1
-while left <= input do
+while i <= input do
     product = product * i
     i = i + 1
 end
-echo("Factorial of ".. input.. ": ".. product)
+echo("Factorial of " .. input .. ": " .. product)
