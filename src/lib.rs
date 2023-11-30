@@ -10,7 +10,7 @@ pub struct StScriptWriter {
     nested: bool,
 }
 
-const BUILTINS: [&'static str; 3] = ["echo", "round", "input"];
+const BUILTINS: [&'static str; 5] = ["echo", "round", "input", "setinput", "messages"];
 
 impl StScriptWriter {
     pub fn run_code(lua_code: String) -> String {
@@ -80,8 +80,8 @@ impl StScriptWriter {
     pub fn primitive_expr(&mut self, expr: &Expr) -> String {
         match expr {
             Expr::Nil(_) => "\"\"".to_string(),
-            Expr::True(_) => "true".to_string(),
-            Expr::False(_) => "false".to_string(),
+            Expr::True(_) => "on".to_string(),
+            Expr::False(_) => "off".to_string(),
             Expr::VarArg(_) => todo!(),
             Expr::Float(f) => f.value().to_string(),
             Expr::Int(i) => i.value().to_string(),
@@ -150,6 +150,21 @@ impl StScriptWriter {
                         };
                         format!("/add {} {}", lhs, rhs)
                     }
+                    BinOp::Minus(_) => {
+                        let lhs = match b.left.as_ref() {
+                            Expr::String(s) => s.value(),
+                            Expr::Name(n) => n.value(),
+                            Expr::Int(i) => i.value().to_string(),
+                            _ => format!("{{{{getvar::{}}}}}", self.set_temp_var(b.left.as_ref())),
+                        };
+                        let rhs = match b.right.as_ref() {
+                            Expr::String(s) => s.value(),
+                            Expr::Name(n) => n.value(),
+                            Expr::Int(i) => i.value().to_string(),
+                            _ => format!("{{{{getvar::{}}}}}", self.set_temp_var(b.right.as_ref())),
+                        };
+                        format!("/sub {} {}", lhs, rhs)
+                    }
                     o => todo!("{:#?}", o),
                 }
             }
@@ -197,6 +212,10 @@ impl StScriptWriter {
                 .iter()
                 .map(|e| match e {
                     Expr::BinExpr(b) if !matches!(b.op, BinOp::Concat(_)) => {
+                        let name = self.set_temp_var(e);
+                        format!("{{{{getvar::{}}}}}", name)
+                    }
+                    Expr::SuffixedExpr(_) => {
                         let name = self.set_temp_var(e);
                         format!("{{{{getvar::{}}}}}", name)
                     }
@@ -259,8 +278,8 @@ impl StScriptWriter {
         self.temp_var_counter += 1;
         let val = match value {
             Expr::Nil(_) => "\"\"".to_string(),
-            Expr::True(_) => "true".to_string(),
-            Expr::False(_) => "false".to_string(),
+            Expr::True(_) => "on".to_string(),
+            Expr::False(_) => "off".to_string(),
             Expr::VarArg(_) => todo!(),
             Expr::Float(t) => t.value().to_string(),
             Expr::Int(t) => t.value().to_string(),
@@ -355,6 +374,12 @@ mod tests {
     #[test]
     fn parse_if() {
         let lua_code = testdata!("if.lua");
+        insta::assert_snapshot!(StScriptWriter::run_code(lua_code));
+    }
+
+    #[test]
+    fn parse_read_messages() {
+        let lua_code = testdata!("read_messages.lua");
         insta::assert_snapshot!(StScriptWriter::run_code(lua_code));
     }
 }
