@@ -266,7 +266,7 @@ impl StScriptWriter {
 
 #[cfg(test)]
 mod tests {
-    use rslua::lexer::{Lexer, LexerConfig};
+    use crate::StScriptWriter;
 
     macro_rules! testdata {
         ($name:expr) => {
@@ -281,16 +281,19 @@ mod tests {
 
     #[test]
     fn parse_circle_area() {
-        let lua = testdata!("circle_area.lua");
-        let mut lexer = Lexer::default();
-        lexer.set_config(LexerConfig {
-            use_origin_string: true,
-            reserve_comments: true,
-        });
-        lexer.run(&lua).unwrap();
-        dbg!(lexer.tokens());
+        let lua_code = testdata!("circle_area.lua");
+        insta::assert_snapshot!(StScriptWriter::run_code(lua_code));
     }
 
     #[test]
-    fn parse_factorial() {}
+    fn parse_factorial() {
+        let lua_code = testdata!("factorial.lua");
+        insta::assert_snapshot!(StScriptWriter::run_code(lua_code));
+    }
+
+    #[test]
+    fn parse_if() {
+        let lua_code = testdata!("if.lua");
+        insta::assert_snapshot!(StScriptWriter::run_code(lua_code));
+    }
 }
